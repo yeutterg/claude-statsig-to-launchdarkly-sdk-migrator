@@ -340,7 +340,7 @@ describe('Migration Validation', () => {
 ## Support
 
 For issues or questions about this migration agent:
-- Create an issue in this repository
+- Create an issue at https://github.com/yeutterg/claude-statsig-to-launchdarkly-sdk-migrator/issues
 - Consult the official documentation:
   - [Statsig JavaScript SDK](https://docs.statsig.com/client/javascript-sdk/)
   - [LaunchDarkly JavaScript SDK](https://docs.launchdarkly.com/sdk/client-side/javascript)
