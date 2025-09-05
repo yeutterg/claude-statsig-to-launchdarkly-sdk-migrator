@@ -225,7 +225,7 @@ mkdir -p ~/.claude/agents/
 
 # Download the agent file directly from this repository
 curl -o ~/.claude/agents/statsig-to-launchdarkly-sdk-migrator.md \
-  https://raw.githubusercontent.com/<username>/<repo>/main/.claude/agents/statsig-to-launchdarkly-sdk-migrator.md
+  https://raw.githubusercontent.com/yeutterg/claude-statsig-to-launchdarkly-sdk-migrator/main/.claude/agents/statsig-to-launchdarkly-sdk-migrator.md
 ```
 
 ### Alternative Methods
@@ -234,7 +234,7 @@ curl -o ~/.claude/agents/statsig-to-launchdarkly-sdk-migrator.md \
 ```bash
 mkdir -p ~/.claude/agents/
 wget -O ~/.claude/agents/statsig-to-launchdarkly-sdk-migrator.md \
-  https://raw.githubusercontent.com/<username>/<repo>/main/.claude/agents/statsig-to-launchdarkly-sdk-migrator.md
+  https://raw.githubusercontent.com/yeutterg/claude-statsig-to-launchdarkly-sdk-migrator/main/.claude/agents/statsig-to-launchdarkly-sdk-migrator.md
 ```
 
 #### Manual Download:
