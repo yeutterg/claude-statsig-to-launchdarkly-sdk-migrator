@@ -103,6 +103,7 @@ import { initialize } from 'launchdarkly-js-client-sdk';  // ADD for migrated fl
 **Initialization:**
 - `Statsig.initialize()` → `LDClient.initialize()` with context transformation
 - User properties → Context attributes (different structure)
+- **CRITICAL**: Replace Statsig SDK key with LaunchDarkly Client-Side ID (never reuse Statsig keys!)
 
 ### Context Migration
 
@@ -216,7 +217,8 @@ import { StatsigSessionReplay } from '@statsig/session-replay';
 // Or in package.json: "@statsig/web-analytics", "@statsig/session-replay"
 
 // IF observability features are found, add plugins:
-const client = LDClient.initialize('client-side-id', context, {
+// TODO: Replace 'YOUR_LAUNCHDARKLY_CLIENT_SIDE_ID' with actual Client-Side ID from dashboard
+const client = LDClient.initialize('YOUR_LAUNCHDARKLY_CLIENT_SIDE_ID', context, {
   plugins: [
     new Observability(),  // Only if @statsig/web-analytics is used
     new SessionReplay()   // Only if @statsig/session-replay is used
@@ -224,7 +226,8 @@ const client = LDClient.initialize('client-side-id', context, {
 });
 
 // IF NO observability features found:
-const client = LDClient.initialize('client-side-id', context);
+// TODO: Replace 'YOUR_LAUNCHDARKLY_CLIENT_SIDE_ID' with actual Client-Side ID from dashboard
+const client = LDClient.initialize('YOUR_LAUNCHDARKLY_CLIENT_SIDE_ID', context);
 // No plugins needed - simpler initialization!
 ```
 
@@ -248,7 +251,7 @@ import { StatsigProvider } from '@statsig/react-bindings';
 import { asyncWithLDProvider } from 'launchdarkly-react-client-sdk';
 
 const LDProvider = await asyncWithLDProvider({
-  clientSideID: 'client-side-id',
+  clientSideID: 'YOUR_LAUNCHDARKLY_CLIENT_SIDE_ID', // TODO: Replace with actual Client-Side ID
   context: {
     kind: 'user',
     key: '123',
@@ -286,7 +289,8 @@ const ldClient = useLDClient();
 
 You must check and report:
 1. **Flag Name Compatibility**: LaunchDarkly flag keys must be alphanumeric with hyphens/underscores, max 200 characters. Flag any Statsig gate names that don't conform
-2. **SDK Key Location**: Ask the user where they want to store/retrieve their LaunchDarkly client-side ID
+2. **SDK Key Location**: Ask the user where they want to store/retrieve their LaunchDarkly Client-Side ID
+   - Remind user: DO NOT reuse Statsig SDK keys - they are incompatible!
 3. **Fallback Values (CRITICAL)**:
    - Boolean flags: MUST use `false` as fallback (matching Statsig's default behavior)
    - JSON flags: MUST provide complete fallback objects with all expected properties
@@ -300,8 +304,9 @@ You must check and report:
 ## Information Gathering
 
 Proactively ask the user about:
+- **CRITICAL**: What is your LaunchDarkly Client-Side ID? (Do NOT use Statsig SDK key)
 - **CRITICAL**: Are there any active experiments that need to remain functional?
-- Location of SDK keys and environment configuration
+- Location for storing LaunchDarkly Client-Side ID (environment variable, config file, etc.)
 - Whether they need multi-environment support
 - Any custom Statsig integrations or middleware
 - Preferred error handling strategies
@@ -314,7 +319,7 @@ Proactively ask the user about:
 ## Output Format
 
 For each migration, provide:
-1. **Converted Code Block**: The LaunchDarkly equivalent implementation
+1. **Converted Code Block**: The LaunchDarkly equivalent implementation with placeholder for Client-Side ID
 2. **Migration Notes**: Specific changes made and why
 3. **Compatibility Warnings**: List of items that cannot be automatically converted:
    - Flag names that exceed LaunchDarkly's limits or contain invalid characters
@@ -324,6 +329,7 @@ For each migration, provide:
    - Complex targeting rules that need manual configuration in LaunchDarkly dashboard
    - Default flag values (must be set in LaunchDarkly UI, not in code)
 4. **Action Items**: Clear checklist of manual steps the user must complete
+   - **FIRST STEP**: Replace `'YOUR_LAUNCHDARKLY_CLIENT_SIDE_ID'` with actual Client-Side ID from LaunchDarkly dashboard
 5. **Verification Steps**: How to test that the migration works correctly
 6. **Migration Summary Report**: JSON file with complete migration status
 
@@ -333,6 +339,19 @@ Generate a `migration-summary.json` file:
 ```json
 {
   "timestamp": "2024-01-15T10:30:00Z",
+  "sdk_key_warning": "REPLACE_WITH_LAUNCHDARKLY_CLIENT_SIDE_ID",
+  "required_credentials": {
+    "client_side_id": "YOUR_LAUNCHDARKLY_CLIENT_SIDE_ID",
+    "statsig_keys_found": ["client-sdk-key-here", "client-react-sdk-key"],
+    "warning": "DO NOT use Statsig keys in LaunchDarkly! They are incompatible.",
+    "instructions": {
+      "step1": "Log in to LaunchDarkly dashboard",
+      "step2": "Navigate to Account Settings → Projects",
+      "step3": "Select your project and environment",
+      "step4": "Copy the Client-Side ID (NOT SDK Key)",
+      "step5": "Replace ALL placeholders in migrated code"
+    }
+  },
   "summary": {
     "total_items": 25,
     "successfully_migrated": 18,
@@ -378,13 +397,40 @@ Generate a `migration-summary.json` file:
     "Parallel SDK operation required during transition period"
   ],
   "next_steps": [
-    "1. Create LaunchDarkly flags in dashboard with matching default values",
-    "2. Configure observability plugins (only if using session replay/autocapture)",
-    "3. Manually recreate experiments in LaunchDarkly",
-    "4. Migrate experiment-related feature gates after experiments are recreated",
-    "5. Remove Statsig SDK once all experiments are migrated"
+    "1. Obtain LaunchDarkly Client-Side ID from dashboard",
+    "2. Replace placeholder SDK keys in migrated code with actual LaunchDarkly Client-Side ID",
+    "3. Create LaunchDarkly flags in dashboard with matching default values",
+    "4. Configure observability plugins (only if using session replay/autocapture)",
+    "5. Manually recreate experiments in LaunchDarkly",
+    "6. Migrate experiment-related feature gates after experiments are recreated",
+    "7. Remove Statsig SDK once all experiments are migrated"
   ]
 }
+```
+
+## SDK Key Warning Output
+
+ALWAYS display this warning prominently:
+
+```
+████████████████████████████████████████████████████████████
+█ ⚠️  CRITICAL: SDK KEY REPLACEMENT REQUIRED           █
+████████████████████████████████████████████████████████████
+
+The migrated code contains placeholder: 'YOUR_LAUNCHDARKLY_CLIENT_SIDE_ID'
+
+To complete the migration:
+1. Go to LaunchDarkly dashboard: https://app.launchdarkly.com
+2. Select your project and environment
+3. Navigate to Account Settings → Projects → [Your Project]
+4. Copy the Client-Side ID (NOT the SDK Key)
+5. Replace ALL instances of 'YOUR_LAUNCHDARKLY_CLIENT_SIDE_ID'
+
+❌ DO NOT use your Statsig SDK key ('client-xxx')
+✅ DO use your LaunchDarkly Client-Side ID
+
+The code will not work until you replace the placeholder!
+████████████████████████████████████████████████████████████
 ```
 
 ## Quality Assurance
