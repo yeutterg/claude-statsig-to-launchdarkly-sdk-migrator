@@ -70,21 +70,29 @@ import { useFlags, useLDClient } from 'launchdarkly-react-client-sdk';
 // Statsig (built-in or separate packages):
 import { StatsigAutocapture } from '@statsig/web-analytics';
 import { StatsigSessionReplay } from '@statsig/session-replay';
-// → LaunchDarkly (requires separate packages):
-import Observability from '@launchdarkly/observability';  // For autocapture
-import SessionReplay from '@launchdarkly/session-replay'; // For session replay
+// → LaunchDarkly (requires separate packages with proper exports):
+import Observability, { LDObserve } from '@launchdarkly/observability';  // For autocapture
+import SessionReplay, { LDRecord } from '@launchdarkly/session-replay'; // For session replay
 ```
 
 **Feature Gates → Boolean Flags:**
-- `statsig.checkGate("gate_name")` → `ldClient.variation("flag-name", false)`
-- React: `useGateValue('gate_name')` → `useFlags().gateName`
+- JavaScript SDK: `statsig.checkGate("gate_name")` → `ldClient.variation("gate_name", false)` (NO automatic camelCase)
+- React SDK: `useGateValue('gate_name')` → `useFlags().gateName` (automatic camelCase by default)
 - CRITICAL: Always use `false` as the fallback value for boolean flags
+- NAMING CONVENTION BY SDK:
+  - **React SDK**: Automatically converts to camelCase by default (`admin_panel_access` → `adminPanelAccess`)
+    - Can disable with `useCamelCaseFlagKeys: false` in options
+  - **JavaScript SDK**: Uses exact flag names from LaunchDarkly (no conversion)
+  - **Node.js SDK**: Uses exact flag names from LaunchDarkly (no conversion)
+  - **Other SDKs** (Python, Go, Java, etc.): Use exact flag names (no conversion)
 - Note: Default flag values (on/off) are configured in the LaunchDarkly UI, not in code
 
 **Dynamic Configs → JSON Flags:**
-- `statsig.getConfig("config_name")` → `ldClient.jsonVariation("config-name", defaultObject)`
+- JavaScript SDK: `statsig.getConfig("config_name")` → `ldClient.jsonVariation("config_name", defaultObject)` (NO automatic camelCase)
+- React SDK: `useConfig('homepage_config')` → `useFlags().homepageConfig` (automatic camelCase by default)
 - `config.get("key", default)` → Access properties directly from returned JSON object
 - CRITICAL: Always provide complete JSON fallback objects matching expected structure
+- NAMING: Same SDK-specific rules apply as for feature gates
 
 **DO NOT MIGRATE (but preserve):**
 - Experiments: Keep any `statsig.getExperiment()` calls intact
@@ -104,6 +112,42 @@ import { initialize } from 'launchdarkly-js-client-sdk';  // ADD for migrated fl
 - `Statsig.initialize()` → `LDClient.initialize()` with context transformation
 - User properties → Context attributes (different structure)
 - **CRITICAL**: Replace Statsig SDK key with LaunchDarkly Client-Side ID (never reuse Statsig keys!)
+
+### Flag Naming Convention by SDK
+
+**CRITICAL**: LaunchDarkly SDKs handle flag names differently:
+
+| SDK | Auto camelCase | Example Input | Example Output | Configuration |
+|-----|---------------|--------------|----------------|---------------|
+| **React** | Yes (default) | `admin_panel_access` | `adminPanelAccess` | `useCamelCaseFlagKeys: true/false` |
+| **JavaScript** | No | `admin_panel_access` | `admin_panel_access` | N/A |
+| **Node.js** | No | `admin_panel_access` | `admin_panel_access` | N/A |
+| **Python** | No | `admin_panel_access` | `admin_panel_access` | N/A |
+| **Go** | No | `admin_panel_access` | `admin_panel_access` | N/A |
+| **Java** | No | `admin_panel_access` | `admin_panel_access` | N/A |
+| **iOS/Swift** | No | `admin_panel_access` | `admin_panel_access` | N/A |
+| **Android** | No | `admin_panel_access` | `admin_panel_access` | N/A |
+
+**React SDK Special Behavior:**
+```javascript
+// React SDK with default settings (useCamelCaseFlagKeys: true)
+const flags = useFlags();
+// LaunchDarkly flag: "admin_panel_access" 
+// React access: flags.adminPanelAccess ✓
+
+// To disable camelCase conversion:
+const LDProvider = asyncWithLDProvider({
+  clientSideID: 'YOUR_ID',
+  reactOptions: {
+    useCamelCaseFlagKeys: false  // Now uses exact flag names
+  }
+});
+```
+
+**Migration Strategy by SDK:**
+- **For React SDK**: Convert flag names to camelCase in migration
+- **For all other SDKs**: Keep exact flag names (underscores, hyphens)
+- **Best Practice**: Create flags in LaunchDarkly using camelCase from the start
 
 ### Context Migration
 
@@ -209,6 +253,23 @@ const multiContext = {
 
 If they don't use these features, DO NOT add the observability plugins.
 
+**Session Replay Parameter Mapping:**
+```javascript
+// Statsig Session Replay configuration:
+new StatsigSessionReplayPlugin({
+  maxSessionDurationMs: 1800000,  // Duration limit - NOT supported in LD
+  recordConsoleErrors: true,       // Console recording - NOT supported in LD
+  privacyMask: true                // Privacy masking - maps to privacySetting
+})
+
+// LaunchDarkly Session Replay configuration:
+new SessionReplay({
+  privacySetting: 'default'  // Options: 'none', 'default', 'strict'
+  // privacyMask: true → privacySetting: 'default' or 'strict'
+  // privacyMask: false → privacySetting: 'none'
+})
+```
+
 **Detection Pattern:**
 ```javascript
 // Check for these imports/packages:
@@ -220,8 +281,16 @@ import { StatsigSessionReplay } from '@statsig/session-replay';
 // TODO: Replace 'YOUR_LAUNCHDARKLY_CLIENT_SIDE_ID' with actual Client-Side ID from dashboard
 const client = LDClient.initialize('YOUR_LAUNCHDARKLY_CLIENT_SIDE_ID', context, {
   plugins: [
-    new Observability(),  // Only if @statsig/web-analytics is used
-    new SessionReplay()   // Only if @statsig/session-replay is used
+    new Observability({
+      tracingOrigins: true,
+      networkRecording: {
+        enabled: true,
+        recordHeadersAndBody: true
+      }
+    }),  // Only if @statsig/web-analytics is used
+    new SessionReplay({
+      privacySetting: 'default'  // Map from Statsig privacyMask setting
+    })   // Only if @statsig/session-replay is used
   ]
 });
 
@@ -352,6 +421,11 @@ Generate a `migration-summary.json` file:
       "step5": "Replace ALL placeholders in migrated code"
     }
   },
+  "migration_context": {
+    "detected_sdk": "react",  // or "javascript", "nodejs", etc.
+    "camelcase_conversion": true,  // true for React, false for others
+    "sdk_specific_notes": "React SDK will auto-convert flag names to camelCase"
+  },
   "summary": {
     "total_items": 25,
     "successfully_migrated": 18,
@@ -362,17 +436,21 @@ Generate a `migration-summary.json` file:
     "feature_gates": [
       {
         "statsig_name": "new_dashboard",
-        "ld_name": "new-dashboard",
+        "ld_name_react": "newDashboard",  // For React SDK (auto-converted)
+        "ld_name_javascript": "new_dashboard",  // For JS/Node/other SDKs (exact)
         "type": "boolean",
-        "fallback": false
+        "fallback": false,
+        "naming_change": "underscore_to_camelCase (React SDK only)"
       }
     ],
     "dynamic_configs": [
       {
         "statsig_name": "homepage_config",
-        "ld_name": "homepage-config",
+        "ld_name_react": "homepageConfig",  // For React SDK (auto-converted)
+        "ld_name_javascript": "homepage_config",  // For JS/Node/other SDKs (exact)
         "type": "json",
-        "fallback_structure": {"title": "Default", "enabled": false}
+        "fallback_structure": {"title": "Default", "enabled": false},
+        "naming_change": "underscore_to_camelCase (React SDK only)"
       }
     ]
   },
@@ -381,20 +459,57 @@ Generate a `migration-summary.json` file:
       {
         "name": "checkout_flow_test",
         "reason": "Experiments require manual migration",
-        "affected_gates": ["express_checkout", "new_payment_flow"]
+        "affected_gates": ["express_checkout", "new_payment_flow"],
+        "action": "Manually recreate experiment in LaunchDarkly dashboard",
+        "impact": "Feature gates remain in Statsig until experiment migration"
       }
     ],
     "blocked_gates": [
       {
         "name": "express_checkout",
         "reason": "Part of experiment: checkout_flow_test",
-        "action_required": "Migrate experiment to LaunchDarkly first"
+        "action_required": "Migrate experiment to LaunchDarkly first",
+        "current_status": "Still using Statsig SDK"
+      }
+    ],
+    "failed_items": [
+      {
+        "name": "complex_gate",
+        "type": "feature_gate",
+        "reason": "Unable to determine proper fallback value",
+        "error_detail": "Gate uses dynamic fallback based on user properties",
+        "action": "Manual review and migration required",
+        "suggestion": "Review code logic and set appropriate fallback"
       }
     ]
   },
+  "observability_migration": {
+    "session_replay": {
+      "migrated": true,
+      "statsig_params": {
+        "maxSessionDurationMs": 1800000,
+        "recordConsoleErrors": true,
+        "privacyMask": true
+      },
+      "launchdarkly_params": {
+        "privacySetting": "default"
+      },
+      "parameter_mapping": {
+        "privacyMask: true": "privacySetting: 'default'",
+        "privacyMask: false": "privacySetting: 'none'"
+      },
+      "lost_features": ["maxSessionDurationMs", "recordConsoleErrors"],
+      "note": "Some Statsig parameters not supported in LaunchDarkly"
+    },
+    "autocapture": {
+      "migrated": true,
+      "note": "Using LaunchDarkly Observability plugin"
+    }
+  },
   "warnings": [
     "Statsig imports preserved due to active experiments",
-    "Parallel SDK operation required during transition period"
+    "Parallel SDK operation required during transition period",
+    "Session replay parameters differ between platforms"
   ],
   "next_steps": [
     "1. Obtain LaunchDarkly Client-Side ID from dashboard",

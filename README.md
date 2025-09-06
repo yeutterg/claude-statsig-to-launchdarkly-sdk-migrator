@@ -62,17 +62,26 @@ import { useFlags, useLDClient } from 'launchdarkly-react-client-sdk';
 import { StatsigAutocapture } from '@statsig/web-analytics';  // Autocapture
 import { StatsigSessionReplay } from '@statsig/session-replay';  // Session replay
 // → LaunchDarkly (only add if you use above features):
-import Observability from '@launchdarkly/observability';  // For autocapture
-import SessionReplay from '@launchdarkly/session-replay';  // For session replay
+import Observability, { LDObserve } from '@launchdarkly/observability';  // For autocapture
+import SessionReplay, { LDRecord } from '@launchdarkly/session-replay';  // For session replay
 ```
 
 #### Feature Gates → Boolean Flags
+
+**Important:** Flag naming depends on the LaunchDarkly SDK:
+- **React SDK only**: Automatically converts to camelCase (`new_feature` → `newFeature`)
+- **All other SDKs**: Use exact flag names (`new_feature` stays `new_feature`)
+
 ```javascript
 // Statsig
 if (statsig.checkGate("new_feature")) { }
 
-// LaunchDarkly (with explicit false fallback)
-if (client.variation("new-feature", false)) { }
+// LaunchDarkly - JavaScript SDK (no conversion)
+if (client.variation("new_feature", false)) { }
+
+// LaunchDarkly - React SDK (automatic camelCase)
+const flags = useFlags();
+if (flags.newFeature) { }  // Note: automatic conversion
 ```
 
 #### Dynamic Configs → JSON Flags
@@ -81,8 +90,13 @@ if (client.variation("new-feature", false)) { }
 const config = statsig.getConfig("homepage_config");
 const title = config.get("title", "Default");
 
-// LaunchDarkly
-const config = client.jsonVariation("homepage-config", { title: "Default" });
+// LaunchDarkly - JavaScript SDK (no conversion)
+const config = client.jsonVariation("homepage_config", { title: "Default" });
+const title = config.title;
+
+// LaunchDarkly - React SDK (automatic camelCase)
+const flags = useFlags();
+const config = flags.homepageConfig ?? { title: "Default" };
 const title = config.title;
 ```
 
@@ -140,8 +154,21 @@ const context = {
 const client = LDClient.initialize('client-side-id-123abc', context, {
   // the observability plugins require JS SDK v3.7+
   plugins: [
-    new Observability(),
-    new SessionReplay()
+    new Observability({
+      // Network recording and tracing options
+      tracingOrigins: true,
+      networkRecording: {
+        enabled: true,
+        recordHeadersAndBody: true
+      }
+    }),
+    new SessionReplay({
+      // LaunchDarkly SessionReplay configuration  
+      privacySetting: 'default'  // Options: 'none', 'default', 'strict'
+      // Note: Parameters differ from Statsig:
+      // - Statsig: maxSessionDurationMs, recordConsoleErrors, privacyMask
+      // - LaunchDarkly: privacySetting only
+    })
   ]
 });
 
@@ -162,8 +189,21 @@ const context: LDClient.LDContext = {
 const client = LDClient.initialize('client-side-id-123abc', context, {
   // the observability plugins require JS SDK v3.7+
   plugins: [
-    new Observability(),
-    new SessionReplay()
+    new Observability({
+      // Network recording and tracing options
+      tracingOrigins: true,
+      networkRecording: {
+        enabled: true,
+        recordHeadersAndBody: true
+      }
+    }),
+    new SessionReplay({
+      // LaunchDarkly SessionReplay configuration  
+      privacySetting: 'default'  // Options: 'none', 'default', 'strict'
+      // Note: Parameters differ from Statsig:
+      // - Statsig: maxSessionDurationMs, recordConsoleErrors, privacyMask
+      // - LaunchDarkly: privacySetting only
+    })
   ]
 });
 
@@ -177,6 +217,55 @@ try {
 ```
 
 ## Important Migration Considerations
+
+### SDK-Specific Flag Naming Behavior
+
+**CRITICAL**: Different LaunchDarkly SDKs handle flag names differently:
+
+| SDK | Auto camelCase | Example: `admin_panel_access` becomes | Configuration |
+|-----|---------------|---------------------------------------|---------------|
+| **React** | Yes (default) | `adminPanelAccess` | `useCamelCaseFlagKeys: false` to disable |
+| **JavaScript** | No | `admin_panel_access` | N/A |
+| **Node.js** | No | `admin_panel_access` | N/A |
+| **Python** | No | `admin_panel_access` | N/A |
+| **Go** | No | `admin_panel_access` | N/A |
+| **Java** | No | `admin_panel_access` | N/A |
+| **iOS/Android** | No | `admin_panel_access` | N/A |
+
+**Recommendations:**
+- When migrating React apps, expect automatic camelCase conversion
+- For all other SDKs, maintain original flag names from LaunchDarkly
+- Consider creating flags in LaunchDarkly using camelCase from the start to avoid confusion
+
+### Session Replay Parameter Mapping
+
+⚠️ **IMPORTANT**: Statsig and LaunchDarkly have different parameter structures for Session Replay:
+
+#### Statsig Session Replay Parameters:
+```javascript
+new StatsigSessionReplayPlugin({
+  maxSessionDurationMs: 1800000,  // Session duration limit
+  recordConsoleErrors: true,       // Console error recording
+  privacyMask: true                // Privacy masking
+})
+```
+
+#### LaunchDarkly Session Replay Parameters:
+```javascript
+new SessionReplay({
+  privacySetting: 'default'  // Options: 'none', 'default', 'strict'
+  // LaunchDarkly does NOT support:
+  // - maxSessionDurationMs
+  // - recordConsoleErrors
+  // - Other Statsig-specific parameters
+})
+```
+
+**Migration Notes:**
+- `privacyMask: true` in Statsig → `privacySetting: 'default'` or `'strict'` in LaunchDarkly
+- `privacyMask: false` in Statsig → `privacySetting: 'none'` in LaunchDarkly
+- Session duration and console error recording must be configured differently in LaunchDarkly
+- Event filtering in Observability plugin works differently between platforms
 
 ### Critical Rules
 1. **Fallback Values**: Boolean flags MUST use `false` as fallback to match Statsig's default behavior
