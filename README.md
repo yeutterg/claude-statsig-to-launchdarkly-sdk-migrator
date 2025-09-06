@@ -257,8 +257,7 @@ The agent will be immediately available in Claude Code. If Claude Code is alread
 When working with Claude Code, you can invoke the agent when you need to migrate Statsig code:
 
 ```
-"I need to migrate this Statsig code to LaunchDarkly:
-statsig.checkGate('feature_flag_name')"
+"I need to migrate this code from the Statsig SDK the LaunchDarkly SDK: [filename]
 ```
 
 The agent will:
